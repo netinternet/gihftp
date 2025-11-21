@@ -1,0 +1,71 @@
+# Binaries
+gihftp
+gihftp.exe
+*.exe
+*.out
+
+# Release directories
+releases/
+dist/
+
+# Config files (except example)
+gihftp.conf
+*.conf
+!gihftp.conf.example
+
+# Backup files
+*.backup
+*.bak
+main.go.backup
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Working directories
+work/
+workdir/
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# Go files
+vendor/
+*.test
+*.prof
+coverage.txt
+coverage.html
+
+# SSH keys (safety)
+*.pem
+*.key
+id_rsa*
+*.private
+
+# Environment files
+.env
+.env.*
+
+# Build artifacts
+build/
+
+# Test files
+testdata/
+*.coverprofile

@@ -1,0 +1,14 @@
+# GIH Public DNS 1
+gihdns1 = ""
+
+# GIH Public DNS 2
+gihdns2 = ""
+
+# GIH API Port
+gihapiport = ""
+
+# SFTP Server
+ftpserver = ""
+
+# SFTP Server log files directory
+ftplogdir = ""
