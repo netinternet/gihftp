@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# GIH-FTP Installation Script
+# LOG-FTP-MERGER Installation Script
 # This script installs the gihftp binary and configuration files
 
 set -e
@@ -19,7 +19,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo "=================================================="
-echo "   GIH-FTP Installation Script"
+echo "   LOG-FTP-MERGER Installation Script"
 echo "=================================================="
 echo ""
 
@@ -102,7 +102,7 @@ echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     cat > "${SYSTEMD_DIR}/${SERVICE_FILE}" << 'EOF'
 [Unit]
-Description=GIH FTP Log Upload Service
+Description=LOG FTP MERGER Log Upload Service
 After=network.target
 
 [Service]

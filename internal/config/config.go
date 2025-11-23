@@ -45,7 +45,7 @@ func Load() (*Config, error) {
 	ftpHost := flag.String("ftp-host", "", "FTP/SFTP server address")
 	ftpUser := flag.String("ftp-user", "root", "FTP/SFTP username")
 	ftpPassword := flag.String("ftp-password", "", "FTP/SFTP password (or use FTP_PASSWORD env var)")
-	ftpLogDir := flag.String("ftp-log-dir", "/var/log/gih/", "Remote directory for log files")
+	ftpLogDir := flag.String("ftp-log-dir", "/var/log/uploads/", "Remote directory for log files")
 	sshKeyPath := flag.String("ssh-key", "$HOME/.ssh/id_rsa", "Path to SSH private key")
 	workDir := flag.String("work-dir", "", "Working directory for temporary files (default: current directory)")
 	logLevel := flag.String("log-level", "info", "Log level (debug, info, error)")
@@ -133,16 +133,16 @@ func Load() (*Config, error) {
 	}
 
 	// FTP Log Directory
-	if *ftpLogDir != "/var/log/gih/" {
+	if *ftpLogDir != "/var/log/uploads/" {
 		cfg.FTPLogDir = *ftpLogDir
 	} else if iniCfg != nil {
 		if dir := iniCfg.Section("").Key("ftplogdir").String(); dir != "" {
 			cfg.FTPLogDir = dir
 		} else {
-			cfg.FTPLogDir = "/var/log/gih/"
+			cfg.FTPLogDir = "/var/log/uploads/"
 		}
 	} else {
-		cfg.FTPLogDir = "/var/log/gih/"
+		cfg.FTPLogDir = "/var/log/uploads/"
 	}
 
 	// SSH Key Path

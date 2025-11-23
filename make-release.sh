@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# GIH-FTP Release Builder
+# LOG-FTP-MERGER Release Builder
 # Bu script kaynak kodları BUILD ederek release paketi oluşturur
 # Kaynak kodlar release paketine DAHİL EDİLMEZ
 
@@ -14,7 +14,7 @@ RELEASE_DIR="releases/${VERSION}"
 PLATFORMS=("linux/amd64" "linux/arm64" "darwin/amd64" "darwin/arm64")
 
 echo "=================================================="
-echo "   GIH-FTP Release Builder"
+echo "   LOG-FTP-MERGER Release Builder"
 echo "=================================================="
 echo "Version:     ${VERSION}"
 echo "Build Date:  ${BUILD_DATE}"
@@ -54,7 +54,7 @@ for platform in "${PLATFORMS[@]}"; do
     echo "📦 Creating release package..."
     cp README.md "${PLATFORM_DIR}/"
     cp gihftp.conf.example "${PLATFORM_DIR}/"
-    cp LICENSE "${PLATFORM_DIR}/" 2>/dev/null || echo "# GIH-FTP License" > "${PLATFORM_DIR}/LICENSE"
+    cp LICENSE "${PLATFORM_DIR}/" 2>/dev/null || echo "# LOG-FTP-MERGER License" > "${PLATFORM_DIR}/LICENSE"
 
     # Install script'lerini ekle (sadece Linux için)
     if [ "$GOOS" = "linux" ]; then
@@ -65,7 +65,7 @@ for platform in "${PLATFORMS[@]}"; do
 
         # INSTALL.txt oluştur
         cat > "${PLATFORM_DIR}/INSTALL.txt" << 'EOF'
-# GIH-FTP Installation Guide
+# LOG-FTP-MERGER Installation Guide
 
 ## Quick Install (Linux)
 
@@ -108,7 +108,7 @@ EOF
     else
         # Mac için INSTALL.txt
         cat > "${PLATFORM_DIR}/INSTALL.txt" << 'EOF'
-# GIH-FTP Installation Guide (macOS)
+# LOG-FTP-MERGER Installation Guide (macOS)
 
 ## Installation
 
@@ -187,7 +187,7 @@ done
 # Release bilgilerini oluştur
 echo "📝 Creating release info..."
 cat > "${RELEASE_DIR}/RELEASE_INFO.txt" << EOF
-GIH-FTP Release ${VERSION}
+LOG-FTP-MERGER Release ${VERSION}
 Built on: ${BUILD_DATE}
 Commit: ${COMMIT_HASH}
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# GIH-FTP Uninstallation Script
+# LOG-FTP-MERGER Uninstallation Script
 # This script removes all gihftp files and configurations
 
 set -e
@@ -21,7 +21,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo "=================================================="
-echo "   GIH-FTP Uninstallation Script"
+echo "   LOG-FTP-MERGER Uninstallation Script"
 echo "=================================================="
 echo ""
 

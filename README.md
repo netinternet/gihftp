@@ -1,6 +1,6 @@
-# GIH-FTP
+# LOG-FTP-MERGER
 
-GIH Güvenli İnternet Yazılımı ile iletişime geçerek birden fazla DNS sunucusundan log dosyalarını alan, birleştiren, istek sayısına göre sıralayan ve BTK FTP sunucusuna yükleyen bir Go uygulamasıdır.
+Birden fazla DNS sunucusundan log dosyalarını toplayan, birleştiren, istek sayısına göre sıralayan ve uzak FTP/SFTP sunucusuna yükleyen bir Go uygulamasıdır.
 
 ## Özellikler
 
@@ -79,11 +79,11 @@ Bu komut şunları oluşturur:
 ./gihftp \
   --gih-servers=dns1.example.com,dns2.example.com \
   --gih-api-port=2035 \
-  --ftp-host=ftp.btk.gov.tr \
-  --ftp-user=btk_user \
-  --ftp-log-dir=/var/log/gih/ \
+  --ftp-host=127.0.0.1 \
+  --ftp-user=upload_user \
+  --ftp-log-dir=/var/log/uploads/ \
   --ssh-key=/root/.ssh/id_rsa \
-  --work-dir=/tmp/gihftp \
+  --work-dir=/tmp/logmerger \
   --log-level=info \
   --cleanup
 ```
@@ -91,7 +91,7 @@ Bu komut şunları oluşturur:
 Password'ü environment variable ile geçirin (güvenlik için):
 ```bash
 export FTP_PASSWORD="your_secure_password"
-./gihftp --gih-servers=... --ftp-host=...
+./gihftp --gih-servers=dns1.example.com,dns2.example.com --ftp-host=127.0.0.1
 ```
 
 ### 2. Config Dosyası ile (Backward Compatible)
@@ -106,32 +106,32 @@ export FTP_PASSWORD="your_secure_password"
 
 Config dosyası formatı (`gihftp.conf.example` dosyasına bakın):
 ```ini
-# GIH Public DNS 1
+# DNS Server 1
 gihdns1 = dns1.example.com
 
-# GIH Public DNS 2
+# DNS Server 2
 gihdns2 = dns2.example.com
 
-# GIH API Port
+# API Port
 gihapiport = 2035
 
 # SFTP Server
-ftpserver = ftp.btk.gov.tr
+ftpserver = 127.0.0.1
 
 # SFTP Server log files directory
-ftplogdir = /var/log/gih/
+ftplogdir = /var/log/uploads/
 ```
 
 ## Flag Parametreleri
 
 | Flag | Açıklama | Default | Zorunlu |
 |------|----------|---------|---------|
-| `--gih-servers` | Virgülle ayrılmış GIH DNS sunucu adresleri | - | ✅ |
-| `--gih-api-port` | GIH API port numarası | 2035 | ❌ |
+| `--gih-servers` | Virgülle ayrılmış DNS sunucu adresleri | - | ✅ |
+| `--gih-api-port` | API port numarası | 2035 | ❌ |
 | `--ftp-host` | SFTP sunucu adresi | - | ✅ |
 | `--ftp-user` | SFTP kullanıcı adı | root | ❌ |
 | `--ftp-password` | SFTP şifresi (env var tercih edilir) | - | ❌ |
-| `--ftp-log-dir` | Uzak sunucuda log dizini | /var/log/gih/ | ❌ |
+| `--ftp-log-dir` | Uzak sunucuda log dizini | /var/log/uploads/ | ❌ |
 | `--ssh-key` | SSH private key path | $HOME/.ssh/id_rsa | ❌ |
 | `--work-dir` | Geçici dosyalar için çalışma dizini | . (mevcut dizin) | ❌ |
 | `--log-level` | Log seviyesi (debug/info/error) | info | ❌ |
@@ -154,12 +154,12 @@ ftplogdir = /var/log/gih/
 # 1. SSH key authentication kullanın
 ./gihftp \
   --gih-servers=dns1.example.com \
-  --ftp-host=ftp.btk.gov.tr \
+  --ftp-host=127.0.0.1 \
   --ssh-key=/root/.ssh/id_rsa
 
 # 2. Password'ü environment variable ile geçirin
 export FTP_PASSWORD="secure_password"
-./gihftp --gih-servers=dns1.example.com --ftp-host=ftp.btk.gov.tr
+./gihftp --gih-servers=dns1.example.com --ftp-host=127.0.0.1
 
 # 3. TLS/SSH doğrulamasını aktif bırakın (default)
 # known_hosts dosyanızı güncel tutun
@@ -206,7 +206,7 @@ Uygulama aşağıdaki exit code'ları döner:
 ### Örnek Log Çıktısı
 
 ```
-time=2025-01-20T10:30:00.000Z level=INFO msg="GIH-FTP Service Starting" version=2.0.0 gih_servers="[dns1.example.com dns2.example.com]" ftp_host=ftp.btk.gov.tr work_dir=/tmp/gihftp
+time=2025-01-20T10:30:00.000Z level=INFO msg="GIH-FTP Service Starting" version=2.0.0 gih_servers="[dns1.example.com dns2.example.com]" ftp_host=127.0.0.1 work_dir=/tmp/gihftp
 time=2025-01-20T10:30:00.100Z level=INFO msg="Fetching logs for date range" start_date=20250113 end_date=20250119
 time=2025-01-20T10:30:01.250Z level=INFO msg="Fetched log files" host=dns1.example.com count=7
 time=2025-01-20T10:30:05.500Z level=INFO msg="Merge statistics" unique_domains=12543 total_requests=1523442 top_domain=google.com top_domain_hits=45231
@@ -310,7 +310,7 @@ Haftalık otomatik çalıştırma için crontab'e ekleyin:
 0 3 * * 1 /usr/bin/gihftp --config=/etc/gihftp.conf >> /var/log/gihftp.log 2>&1
 
 # veya flag ile
-0 3 * * 1 FTP_PASSWORD="xxx" /usr/bin/gihftp --gih-servers=dns1,dns2 --ftp-host=ftp.btk.gov.tr >> /var/log/gihftp.log 2>&1
+0 3 * * 1 FTP_PASSWORD="xxx" /usr/bin/gihftp --gih-servers=dns1,dns2 --ftp-host=127.0.0.1 >> /var/log/gihftp.log 2>&1
 ```
 
 ## Systemd Service (Opsiyonel)
