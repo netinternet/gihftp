@@ -84,133 +84,137 @@ func run(cfg *config.Config) int {
 		"end_date", endDate,
 	)
 
-	// Create merger
-	m := merger.New(cfg.WorkDir)
+	days := getLast7Days()
 
-	// Fetch logs from all GIH servers
-	successCount := 0
-	failureCount := 0
+	totalFailures := 0
 
-	for _, host := range cfg.GIHServers {
-		if err := fetchFromServer(apiClient, m, host, cfg.GIHAPIPort, startDate, endDate); err != nil {
-			logger.Error("Failed to fetch from server",
-				"host", host,
-				"error", err,
-			)
-			failureCount++
-		} else {
-			successCount++
+	for _, day := range days {
+
+		dateStr := day.Format("20060102")
+
+		logger.Info("Processing day", "date", dateStr)
+
+		m := merger.New(cfg.WorkDir)
+
+		daySuccess := 0
+		dayFailure := 0
+
+		for _, host := range cfg.GIHServers {
+
+			err := fetchFromServerDaily(apiClient, m, host, cfg.GIHAPIPort, dateStr)
+			if err != nil {
+				logger.Error("Daily fetch failed",
+					"host", host,
+					"date", dateStr,
+					"error", err)
+				dayFailure++
+			} else {
+				daySuccess++
+			}
 		}
-	}
 
-	if successCount == 0 {
-		logger.Error("Failed to fetch logs from any server")
-		return ExitFetchError
-	}
+		if daySuccess == 0 {
+			logger.Warn("No successful fetch for this day", "date", dateStr)
+			totalFailures++
+			continue
+		}
 
-	if failureCount > 0 {
-		logger.Warn("Some servers failed",
-			"success", successCount,
-			"failures", failureCount,
+		stats := m.GetStats()
+
+		logger.Info("Daily merge statistics",
+			"date", dateStr,
+			"unique_domains", stats["unique_domains"],
+			"total_requests", stats["total_requests"],
+			"top_domain", stats["top_domain"],
+			"top_domain_hits", stats["top_domain_hits"],
 		)
-	}
 
-	// Log merge statistics
-	stats := m.GetStats()
-	logger.Info("Merge statistics",
-		"unique_domains", stats["unique_domains"],
-		"total_requests", stats["total_requests"],
-		"top_domain", stats["top_domain"],
-		"top_domain_hits", stats["top_domain_hits"],
-	)
+		filename := fmt.Sprintf("NETINTERNET-GIH-DNS_250k-%s.txt", dateStr)
+		outputPath, err := m.SaveToFile(filename)
+		if err != nil {
+			logger.Error("Failed to save daily merged file",
+				"date", dateStr,
+				"error", err)
+			totalFailures++
+			continue
+		}
 
-	// Save merged data to file
-	outputFilename := fmt.Sprintf("MERGED_WEEK_%s.log", time.Now().Format("20060102"))
-	outputPath, err := m.SaveToFile(outputFilename)
-	if err != nil {
-		logger.Error("Failed to save merged file", "error", err)
-		return ExitMergeError
-	}
+		logger.Info("Daily merged file created", "file", outputPath)
 
-	logger.Info("Merged file created", "path", outputPath)
+		if err := uploadToSFTP(cfg, outputPath); err != nil {
+			logger.Error("Daily SFTP upload failed",
+				"date", dateStr,
+				"file", outputPath,
+				"error", err)
+			totalFailures++
+			continue
+		}
 
-	// Upload to SFTP server
-	if err := uploadToSFTP(cfg, outputPath); err != nil {
-		logger.Error("Failed to upload to SFTP", "error", err)
-		return ExitUploadError
-	}
-
-	// Cleanup temporary files if requested
-	if cfg.CleanupAfter {
-		if err := os.Remove(outputPath); err != nil {
-			logger.Warn("Failed to remove temporary file", "file", outputPath, "error", err)
-		} else {
-			logger.Info("Temporary file removed", "file", outputPath)
+		if cfg.CleanupAfter {
+			if err := os.Remove(outputPath); err != nil {
+				logger.Warn("Failed to remove temp file", "file", outputPath)
+			} else {
+				logger.Info("Temp file removed", "file", outputPath)
+			}
 		}
 	}
 
 	duration := time.Since(startTime)
-	logger.Info("Processing completed",
+	logger.Info("Daily processing completed",
 		"duration_seconds", duration.Seconds(),
 	)
 
-	if failureCount > 0 {
+	if totalFailures > 0 {
 		return ExitPartialError
 	}
 
 	return ExitSuccess
 }
 
-func fetchFromServer(apiClient *gihapi.Client, m *merger.Merger, host, port, startDate, endDate string) error {
-	logger.Info("Fetching logs from server", "host", host)
+func fetchFromServerDaily(apiClient *gihapi.Client, m *merger.Merger, host, port, date string) error {
 
-	// Get list of log files
-	files, err := apiClient.FetchLogFiles(host, port, startDate, endDate)
+	logger.Info("Fetching daily logs from server",
+		"host", host,
+		"date", date,
+	)
+
+	files, err := apiClient.FetchLogFiles(host, port, date, date)
 	if err != nil {
-		return fmt.Errorf("failed to fetch log file list: %w", err)
+		return fmt.Errorf("failed to fetch daily log list: %w", err)
 	}
 
 	if len(files) == 0 {
-		logger.Warn("No log files found", "host", host)
+		logger.Warn("No daily log files found",
+			"host", host,
+			"date", date)
 		return nil
 	}
 
-	logger.Info("Found log files",
-		"host", host,
-		"count", len(files),
-	)
-
-	// Download and merge each file
 	for _, file := range files {
-		logger.Debug("Downloading log file",
+		logger.Debug("Downloading daily log file",
 			"host", host,
+			"date", date,
 			"filename", file.Filename,
-			"size_bytes", file.Size,
 		)
 
 		content, err := apiClient.DownloadFile(host, port, file.DownloadURL)
 		if err != nil {
-			logger.Error("Failed to download file",
+			logger.Error("Failed to download daily log",
 				"host", host,
+				"date", date,
 				"filename", file.Filename,
-				"error", err,
-			)
+				"error", err)
 			continue
 		}
 
 		if err := m.AddContent(content); err != nil {
-			logger.Error("Failed to merge file content",
+			logger.Error("Failed to merge daily log",
 				"host", host,
+				"date", date,
 				"filename", file.Filename,
-				"error", err,
-			)
+				"error", err)
 			continue
 		}
-
-		logger.Debug("File merged successfully",
-			"host", host,
-			"filename", file.Filename,
-		)
 	}
 
 	return nil
@@ -243,4 +247,15 @@ func uploadToSFTP(cfg *config.Config, localPath string) error {
 	)
 
 	return nil
+}
+
+func getLast7Days() []time.Time {
+	days := []time.Time{}
+	today := time.Now().AddDate(0, 0, -1)
+
+	for i := 0; i < 7; i++ {
+		days = append(days, today.AddDate(0, 0, -i))
+	}
+
+	return days
 }
