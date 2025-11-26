@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"gih-ftp/internal/config"
+	ftpclient "gih-ftp/internal/ftp"
 	"gih-ftp/internal/gihapi"
 	"gih-ftp/internal/logger"
 	"gih-ftp/internal/merger"
@@ -141,8 +143,8 @@ func run(cfg *config.Config) int {
 
 		logger.Info("Daily merged file created", "file", outputPath)
 
-		if err := uploadToSFTP(cfg, outputPath); err != nil {
-			logger.Error("Daily SFTP upload failed",
+		if err := uploadToFTP(cfg, outputPath); err != nil {
+			logger.Error("Daily FTP upload failed",
 				"date", dateStr,
 				"file", outputPath,
 				"error", err)
@@ -247,6 +249,37 @@ func uploadToSFTP(cfg *config.Config, localPath string) error {
 	)
 
 	return nil
+}
+
+func uploadToFTP(cfg *config.Config, localPath string) error {
+	logger.Info("Uploading to FTP server")
+
+	ftpClient := ftpclient.NewClient(
+		normalizeFTPHost(cfg.FTPHost),
+		cfg.FTPUser,
+		cfg.FTPPassword,
+	)
+
+	filename := filepath.Base(localPath)
+	remotePath := filepath.Join(cfg.FTPLogDir, filename)
+
+	if err := ftpClient.Upload(localPath, remotePath); err != nil {
+		return fmt.Errorf("FTP upload failed: %w", err)
+	}
+
+	logger.Info("FTP upload successful",
+		"local_path", localPath,
+		"remote_path", remotePath,
+	)
+
+	return nil
+}
+
+func normalizeFTPHost(host string) string {
+	if !strings.Contains(host, ":") {
+		return host + ":21"
+	}
+	return host
 }
 
 func getLast7Days() []time.Time {

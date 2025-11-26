@@ -52,6 +52,12 @@ func (m *Merger) AddContent(content []byte) error {
 		domain := strings.TrimSpace(parts[0])
 		countStr := strings.TrimSpace(parts[1])
 
+		if !isValidDomain(domain) {
+			linesSkipped++
+			logger.Debug("Skipping invalid domain", "domain", domain)
+			continue
+		}
+
 		count, err := strconv.Atoi(countStr)
 		if err != nil {
 			linesSkipped++
@@ -174,4 +180,20 @@ func (m *Merger) Clear() {
 
 func (m *Merger) GetDomainCount() int {
 	return len(m.data)
+}
+
+func isValidDomain(d string) bool {
+	if d == "" {
+		return false
+	}
+
+	if strings.Contains(d, "#") {
+		return false
+	}
+
+	if strings.HasSuffix(d, ".#") {
+		return false
+	}
+
+	return true
 }

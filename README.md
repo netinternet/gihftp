@@ -1,12 +1,13 @@
 # LOG-FTP-MERGER
 
-Birden fazla DNS sunucusundan log dosyalarını toplayan, birleştiren, istek sayısına göre sıralayan ve uzak FTP/SFTP sunucusuna yükleyen bir Go uygulamasıdır.
+Birden fazla DNS sunucusundan log dosyalarını toplayan, günlük bazda birleştiren, istek sayısına göre sıralayan ve uzak FTP/SFTP sunucusuna yükleyen bir Go uygulamasıdır.
 
 ## Özellikler
 
 - ✅ **Command-line flag desteği** - Binary olarak flag'lerle çalışır
 - ✅ **Backward compatible** - Eski config dosyası formatını destekler
-- ✅ **Güvenli SFTP** - SSH key authentication ve host key verification
+- ✅ **FTP & SFTP desteği** - Hem standart FTP hem de güvenli SFTP ile upload
+- ✅ **Günlük bazda işleme** - Son 7 günün loglarını ayrı ayrı işler ve yükler
 - ✅ **TLS güvenliği** - Sertifika doğrulama desteği
 - ✅ **Structured logging** - Debug/Info/Error seviyeleri ile detaylı loglama
 - ✅ **Çalışma dizini yönetimi** - Geçici dosyalar için özel dizin
@@ -60,6 +61,31 @@ Tüm platformlar için release paketi oluşturmak:
 
 ```bash
 ./make-release.sh v2.0.0
+```
+
+## Nasıl Çalışır
+
+Uygulama şu adımları takip eder:
+
+1. **Tarih aralığı belirleme**: Son 7 günün tarihlerini hesaplar (dünden başlayarak geriye doğru)
+2. **Günlük işleme döngüsü**: Her gün için ayrı ayrı işlem yapar:
+   - Tüm GIH sunucularından o güne ait log dosyalarını çeker
+   - Aynı domainlerin istek sayılarını birleştirir (merge)
+   - İstek sayısına göre azalan sırada sıralar
+   - `NETINTERNET-GIH-DNS_250k-YYYYMMDD.txt` formatında dosya oluşturur
+   - FTP sunucusuna yükler
+   - Geçici dosyayı temizler (cleanup aktifse)
+3. **Sonuç raporlama**: İşlem süresini ve başarı durumunu loglar
+
+### Log Dosyası Formatı
+
+Giriş ve çıkış dosyaları `domain|count` formatındadır:
+
+```
+google.com|45231
+facebook.com|32156
+youtube.com|28943
+...
 ```
 
 Bu komut şunları oluşturur:
@@ -208,9 +234,12 @@ Uygulama aşağıdaki exit code'ları döner:
 ```
 time=2025-01-20T10:30:00.000Z level=INFO msg="GIH-FTP Service Starting" version=2.0.0 gih_servers="[dns1.example.com dns2.example.com]" ftp_host=127.0.0.1 work_dir=/tmp/gihftp
 time=2025-01-20T10:30:00.100Z level=INFO msg="Fetching logs for date range" start_date=20250113 end_date=20250119
-time=2025-01-20T10:30:01.250Z level=INFO msg="Fetched log files" host=dns1.example.com count=7
-time=2025-01-20T10:30:05.500Z level=INFO msg="Merge statistics" unique_domains=12543 total_requests=1523442 top_domain=google.com top_domain_hits=45231
-time=2025-01-20T10:30:05.750Z level=INFO msg="SFTP upload completed" bytes_uploaded=524288 duration_seconds=0.5 speed_mbps=1.00
+time=2025-01-20T10:30:00.150Z level=INFO msg="Processing day" date=20250119
+time=2025-01-20T10:30:01.250Z level=INFO msg="Fetching daily logs from server" host=dns1.example.com date=20250119
+time=2025-01-20T10:30:02.500Z level=INFO msg="Daily merge statistics" date=20250119 unique_domains=12543 total_requests=1523442 top_domain=google.com top_domain_hits=45231
+time=2025-01-20T10:30:02.600Z level=INFO msg="Daily merged file created" file=/tmp/gihftp/NETINTERNET-GIH-DNS_250k-20250119.txt
+time=2025-01-20T10:30:03.000Z level=INFO msg="FTP upload successful" local_path=/tmp/gihftp/NETINTERNET-GIH-DNS_250k-20250119.txt remote_path=/var/log/uploads/NETINTERNET-GIH-DNS_250k-20250119.txt
+time=2025-01-20T10:30:05.800Z level=INFO msg="Daily processing completed" duration_seconds=5.8
 time=2025-01-20T10:30:05.800Z level=INFO msg="GIH-FTP Service completed successfully"
 ```
 
@@ -225,6 +254,8 @@ gih-ftp/
 │   ├── config/                  # Konfigürasyon yönetimi
 │   │   └── config.go
 │   ├── gihapi/                  # GIH API client
+│   │   └── client.go
+│   ├── ftp/                     # FTP upload işlemleri
 │   │   └── client.go
 │   ├── sftp/                    # SFTP upload işlemleri
 │   │   └── client.go
@@ -470,6 +501,9 @@ Bu proje NI (Netinternet) için geliştirilmiştir.
 - ✅ Release builder (make-release.sh)
 - ✅ Otomatik installer/uninstaller scriptleri
 - ✅ Binary-only dağıtım (kaynak kod koruması)
+- ✅ **FTP client desteği** - SFTP'nin yanında standart FTP protokolü
+- ✅ **Günlük bazda işleme** - Son 7 günün logları ayrı ayrı birleştirilir ve yüklenir
+- ✅ **Dosya adlandırma** - `NETINTERNET-GIH-DNS_250k-YYYYMMDD.txt` formatında günlük dosyalar
 
 ### Güvenlik İyileştirmeleri
 - ✅ TLS sertifika doğrulama (default: aktif)
