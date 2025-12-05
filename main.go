@@ -79,140 +79,130 @@ func run(cfg *config.Config) int {
 	apiClient := gihapi.NewClient(cfg.InsecureSkipVerify)
 	defer apiClient.Close()
 
-	// Get date range for log files
-	startDate, endDate := gihapi.GetLastWeekDates()
-	logger.Info("Fetching logs for date range",
+	startDate, endDate := getLastWeekRange()
+	logger.Info("Fetching logs for last week",
 		"start_date", startDate,
 		"end_date", endDate,
 	)
 
-	days := getLast7Days()
+	m := merger.New(cfg.WorkDir)
 
-	totalFailures := 0
+	successCount := 0
+	failureCount := 0
 
-	for _, day := range days {
-
-		dateStr := day.Format("20060102")
-
-		logger.Info("Processing day", "date", dateStr)
-
-		m := merger.New(cfg.WorkDir)
-
-		daySuccess := 0
-		dayFailure := 0
-
-		for _, host := range cfg.GIHServers {
-
-			err := fetchFromServerDaily(apiClient, m, host, cfg.GIHAPIPort, dateStr)
-			if err != nil {
-				logger.Error("Daily fetch failed",
-					"host", host,
-					"date", dateStr,
-					"error", err)
-				dayFailure++
-			} else {
-				daySuccess++
-			}
-		}
-
-		if daySuccess == 0 {
-			logger.Warn("No successful fetch for this day", "date", dateStr)
-			totalFailures++
-			continue
-		}
-
-		stats := m.GetStats()
-
-		logger.Info("Daily merge statistics",
-			"date", dateStr,
-			"unique_domains", stats["unique_domains"],
-			"total_requests", stats["total_requests"],
-			"top_domain", stats["top_domain"],
-			"top_domain_hits", stats["top_domain_hits"],
-		)
-
-		filename := fmt.Sprintf("NETINTERNET-GIH-DNS_250k-%s.txt", dateStr)
-		outputPath, err := m.SaveToFile(filename)
+	for _, host := range cfg.GIHServers {
+		err := fetchFromServerWeekly(apiClient, m, host, cfg.GIHAPIPort, startDate, endDate)
 		if err != nil {
-			logger.Error("Failed to save daily merged file",
-				"date", dateStr,
+			logger.Error("Weekly fetch failed",
+				"host", host,
 				"error", err)
-			totalFailures++
-			continue
+			failureCount++
+		} else {
+			successCount++
 		}
+	}
 
-		logger.Info("Daily merged file created", "file", outputPath)
+	if successCount == 0 {
+		logger.Error("No successful fetch from any server")
+		return ExitFetchError
+	}
 
-		if err := uploadToFTP(cfg, outputPath); err != nil {
-			logger.Error("Daily FTP upload failed",
-				"date", dateStr,
-				"file", outputPath,
-				"error", err)
-			totalFailures++
-			continue
-		}
+	stats := m.GetStats()
+	logger.Info("Weekly merge statistics",
+		"week_start", startDate,
+		"week_end", endDate,
+		"unique_domains", stats["unique_domains"],
+		"total_requests", stats["total_requests"],
+		"top_domain", stats["top_domain"],
+		"top_domain_hits", stats["top_domain_hits"],
+	)
 
-		if cfg.CleanupAfter {
-			if err := os.Remove(outputPath); err != nil {
-				logger.Warn("Failed to remove temp file", "file", outputPath)
-			} else {
-				logger.Info("Temp file removed", "file", outputPath)
-			}
+	uploadDate := time.Now().Format("20060102")
+	filename := fmt.Sprintf("NETINTERNET-GIH-DNS_250k-%s.txt", uploadDate)
+	outputPath, err := m.SaveToFile(filename)
+	if err != nil {
+		logger.Error("Failed to save weekly merged file", "error", err)
+		return ExitMergeError
+	}
+
+	logger.Info("Weekly merged file created",
+		"file", outputPath,
+		"week_start", startDate,
+		"week_end", endDate,
+	)
+
+	if err := uploadToFTP(cfg, outputPath); err != nil {
+		logger.Error("FTP upload failed",
+			"file", outputPath,
+			"error", err)
+		return ExitUploadError
+	}
+
+	if cfg.CleanupAfter {
+		if err := os.Remove(outputPath); err != nil {
+			logger.Warn("Failed to remove temp file", "file", outputPath)
+		} else {
+			logger.Info("Temp file removed", "file", outputPath)
 		}
 	}
 
 	duration := time.Since(startTime)
-	logger.Info("Daily processing completed",
+	logger.Info("Weekly processing completed",
 		"duration_seconds", duration.Seconds(),
+		"servers_success", successCount,
+		"servers_failed", failureCount,
 	)
 
-	if totalFailures > 0 {
+	if failureCount > 0 {
 		return ExitPartialError
 	}
 
 	return ExitSuccess
 }
 
-func fetchFromServerDaily(apiClient *gihapi.Client, m *merger.Merger, host, port, date string) error {
-
-	logger.Info("Fetching daily logs from server",
+func fetchFromServerWeekly(apiClient *gihapi.Client, m *merger.Merger, host, port, startDate, endDate string) error {
+	logger.Info("Fetching weekly logs from server",
 		"host", host,
-		"date", date,
+		"start_date", startDate,
+		"end_date", endDate,
 	)
 
-	files, err := apiClient.FetchLogFiles(host, port, date, date)
+	files, err := apiClient.FetchLogFiles(host, port, startDate, endDate)
 	if err != nil {
-		return fmt.Errorf("failed to fetch daily log list: %w", err)
+		return fmt.Errorf("failed to fetch weekly log list: %w", err)
 	}
 
 	if len(files) == 0 {
-		logger.Warn("No daily log files found",
+		logger.Warn("No weekly log files found",
 			"host", host,
-			"date", date)
+			"start_date", startDate,
+			"end_date", endDate)
 		return nil
 	}
 
+	logger.Info("Found log files for week",
+		"host", host,
+		"file_count", len(files),
+	)
+
 	for _, file := range files {
-		logger.Debug("Downloading daily log file",
+		logger.Debug("Downloading log file",
 			"host", host,
-			"date", date,
 			"filename", file.Filename,
 		)
 
 		content, err := apiClient.DownloadFile(host, port, file.DownloadURL)
 		if err != nil {
-			logger.Error("Failed to download daily log",
+			logger.Error("Failed to download log",
 				"host", host,
-				"date", date,
 				"filename", file.Filename,
 				"error", err)
 			continue
 		}
 
 		if err := m.AddContent(content); err != nil {
-			logger.Error("Failed to merge daily log",
+			logger.Error("Failed to merge log",
 				"host", host,
-				"date", date,
 				"filename", file.Filename,
 				"error", err)
 			continue
@@ -282,13 +272,14 @@ func normalizeFTPHost(host string) string {
 	return host
 }
 
-func getLast7Days() []time.Time {
-	days := []time.Time{}
-	today := time.Now().AddDate(0, 0, -1)
+func getLastWeekRange() (startDate, endDate string) {
+	now := time.Now()
 
-	for i := 0; i < 7; i++ {
-		days = append(days, today.AddDate(0, 0, -i))
-	}
+	yesterday := now.AddDate(0, 0, -1)
+	endDate = yesterday.Format("20060102")
 
-	return days
+	weekAgo := now.AddDate(0, 0, -7)
+	startDate = weekAgo.Format("20060102")
+
+	return startDate, endDate
 }

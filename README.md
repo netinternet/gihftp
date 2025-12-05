@@ -1,13 +1,15 @@
 # LOG-FTP-MERGER
 
-Birden fazla DNS sunucusundan log dosyalarını toplayan, günlük bazda birleştiren, istek sayısına göre sıralayan ve uzak FTP/SFTP sunucusuna yükleyen bir Go uygulamasıdır.
+Birden fazla DNS sunucusundan log dosyalarını toplayan, haftalık bazda birleştiren, istek sayısına göre sıralayan ve FTP sunucusuna yükleyen bir Go uygulamasıdır.
 
 ## Özellikler
 
+- ✅ **Haftalık tek dosya** - Son 7 günün verilerini tek dosyada birleştirir
+- ✅ **FTP ile gönderim** - Standart FTP protokolü ile upload
+- ✅ **Pazartesi çalıştırma** - Her hafta Pazartesi günü önceki 7 günün verilerini gönderir
+- ✅ **Ayda 4 dosya** - Her ay 4 haftalık rapor dosyası oluşturur
 - ✅ **Command-line flag desteği** - Binary olarak flag'lerle çalışır
 - ✅ **Backward compatible** - Eski config dosyası formatını destekler
-- ✅ **FTP & SFTP desteği** - Hem standart FTP hem de güvenli SFTP ile upload
-- ✅ **Günlük bazda işleme** - Son 7 günün loglarını ayrı ayrı işler ve yükler
 - ✅ **TLS güvenliği** - Sertifika doğrulama desteği
 - ✅ **Structured logging** - Debug/Info/Error seviyeleri ile detaylı loglama
 - ✅ **Çalışma dizini yönetimi** - Geçici dosyalar için özel dizin
@@ -65,17 +67,25 @@ Tüm platformlar için release paketi oluşturmak:
 
 ## Nasıl Çalışır
 
-Uygulama şu adımları takip eder:
+Uygulama **her Pazartesi** çalıştırılmak üzere tasarlanmıştır ve şu adımları takip eder:
 
-1. **Tarih aralığı belirleme**: Son 7 günün tarihlerini hesaplar (dünden başlayarak geriye doğru)
-2. **Günlük işleme döngüsü**: Her gün için ayrı ayrı işlem yapar:
-   - Tüm GIH sunucularından o güne ait log dosyalarını çeker
-   - Aynı domainlerin istek sayılarını birleştirir (merge)
+1. **Tarih aralığı belirleme**: Son 7 günün tarih aralığını hesaplar (dünden 7 gün geriye)
+2. **Log toplama**: Tüm GIH DNS sunucularından haftalık log dosyalarını çeker
+3. **Birleştirme (Merge)**: 
+   - Tüm sunuculardan gelen verileri tek bir veri setinde birleştirir
+   - Aynı domainlerin istek sayılarını toplar
    - İstek sayısına göre azalan sırada sıralar
-   - `NETINTERNET-GIH-DNS_250k-YYYYMMDD.txt` formatında dosya oluşturur
-   - FTP sunucusuna yükler
-   - Geçici dosyayı temizler (cleanup aktifse)
-3. **Sonuç raporlama**: İşlem süresini ve başarı durumunu loglar
+4. **Dosya oluşturma**: `NETINTERNET-GIH-DNS_250k-YYYYMMDD.txt` formatında tek dosya oluşturur
+   - Dosya adındaki tarih: **Upload tarihi** (bugünün tarihi)
+5. **FTP ile gönderim**: Dosyayı belirtilen FTP sunucusuna yükler
+6. **Temizlik**: Geçici dosyayı siler (cleanup aktifse)
+
+### Çalışma Periyodu
+
+| Gün | Açıklama |
+|-----|----------|
+| Pazartesi | Uygulama çalışır, önceki 7 günün (Pzt-Paz) verilerini gönderir |
+| Ayda ~4 kez | Her ay yaklaşık 4 haftalık rapor dosyası oluşturulur |
 
 ### Log Dosyası Formatı
 
@@ -232,15 +242,15 @@ Uygulama aşağıdaki exit code'ları döner:
 ### Örnek Log Çıktısı
 
 ```
-time=2025-01-20T10:30:00.000Z level=INFO msg="GIH-FTP Service Starting" version=2.0.0 gih_servers="[dns1.example.com dns2.example.com]" ftp_host=127.0.0.1 work_dir=/tmp/gihftp
-time=2025-01-20T10:30:00.100Z level=INFO msg="Fetching logs for date range" start_date=20250113 end_date=20250119
-time=2025-01-20T10:30:00.150Z level=INFO msg="Processing day" date=20250119
-time=2025-01-20T10:30:01.250Z level=INFO msg="Fetching daily logs from server" host=dns1.example.com date=20250119
-time=2025-01-20T10:30:02.500Z level=INFO msg="Daily merge statistics" date=20250119 unique_domains=12543 total_requests=1523442 top_domain=google.com top_domain_hits=45231
-time=2025-01-20T10:30:02.600Z level=INFO msg="Daily merged file created" file=/tmp/gihftp/NETINTERNET-GIH-DNS_250k-20250119.txt
-time=2025-01-20T10:30:03.000Z level=INFO msg="FTP upload successful" local_path=/tmp/gihftp/NETINTERNET-GIH-DNS_250k-20250119.txt remote_path=/var/log/uploads/NETINTERNET-GIH-DNS_250k-20250119.txt
-time=2025-01-20T10:30:05.800Z level=INFO msg="Daily processing completed" duration_seconds=5.8
-time=2025-01-20T10:30:05.800Z level=INFO msg="GIH-FTP Service completed successfully"
+time=2025-01-20T10:30:00.000Z level=INFO msg="GIH-FTP Service Starting" version=2.0.0 gih_servers="[dns1.example.com dns2.example.com]" ftp_host=x.x.x.x work_dir=/tmp/gihftp
+time=2025-01-20T10:30:00.100Z level=INFO msg="Fetching logs for last week" start_date=20250113 end_date=20250119
+time=2025-01-20T10:30:01.250Z level=INFO msg="Fetching weekly logs from server" host=dns1.example.com start_date=20250113 end_date=20250119
+time=2025-01-20T10:30:02.500Z level=INFO msg="Found log files for week" host=dns1.example.com file_count=7
+time=2025-01-20T10:30:05.000Z level=INFO msg="Weekly merge statistics" week_start=20250113 week_end=20250119 unique_domains=87654 total_requests=10523442 top_domain=google.com top_domain_hits=315231
+time=2025-01-20T10:30:05.100Z level=INFO msg="Weekly merged file created" file=/tmp/gihftp/NETINTERNET-GIH-DNS_250k-20250120.txt week_start=20250113 week_end=20250119
+time=2025-01-20T10:30:06.500Z level=INFO msg="FTP upload successful" local_path=/tmp/gihftp/NETINTERNET-GIH-DNS_250k-20250120.txt remote_path=/var/log/uploads/NETINTERNET-GIH-DNS_250k-20250120.txt
+time=2025-01-20T10:30:06.600Z level=INFO msg="Weekly processing completed" duration_seconds=6.6 servers_success=2 servers_failed=0
+time=2025-01-20T10:30:06.600Z level=INFO msg="GIH-FTP Service completed successfully"
 ```
 
 ## Proje Yapısı
@@ -334,15 +344,17 @@ ssh root@your-server.example.com "chmod +x /usr/bin/gihftp"
 
 ### Cron ile Otomatik Çalıştırma
 
-Haftalık otomatik çalıştırma için crontab'e ekleyin:
+**Her Pazartesi** otomatik çalıştırma için crontab'e ekleyin:
 
 ```bash
-# Her pazartesi sabah 3:00'da çalıştır
+# Her Pazartesi sabah 03:00'da çalıştır (önceki haftanın verilerini gönderir)
 0 3 * * 1 /usr/bin/gihftp --config=/etc/gihftp.conf >> /var/log/gihftp.log 2>&1
 
 # veya flag ile
-0 3 * * 1 FTP_PASSWORD="xxx" /usr/bin/gihftp --gih-servers=dns1,dns2 --ftp-host=127.0.0.1 >> /var/log/gihftp.log 2>&1
+0 3 * * 1 FTP_PASSWORD="xxx" /usr/bin/gihftp --gih-servers=dns1,dns2 --ftp-host=x.x.x.x >> /var/log/gihftp.log 2>&1
 ```
+
+**Not:** Uygulama çalıştırıldığında, son 7 günün (dünden geriye) verilerini toplar ve gönderir. Dosya adında upload tarihi kullanılır. Crontab ile her Pazartesi çalıştırıldığında önceki haftanın tamamını kapsar.
 
 ## Systemd Service (Opsiyonel)
 
@@ -501,9 +513,9 @@ Bu proje NI (Netinternet) için geliştirilmiştir.
 - ✅ Release builder (make-release.sh)
 - ✅ Otomatik installer/uninstaller scriptleri
 - ✅ Binary-only dağıtım (kaynak kod koruması)
-- ✅ **FTP client desteği** - SFTP'nin yanında standart FTP protokolü
-- ✅ **Günlük bazda işleme** - Son 7 günün logları ayrı ayrı birleştirilir ve yüklenir
-- ✅ **Dosya adlandırma** - `NETINTERNET-GIH-DNS_250k-YYYYMMDD.txt` formatında günlük dosyalar
+- ✅ **FTP client desteği** - Standart FTP protokolü ile upload
+- ✅ **Haftalık tek dosya** - Son 7 günün tüm verilerini tek dosyada birleştirir
+- ✅ **Dosya adlandırma** - `NETINTERNET-GIH-DNS_250k-YYYYMMDD.txt` formatında (upload tarihi ile)
 
 ### Güvenlik İyileştirmeleri
 - ✅ TLS sertifika doğrulama (default: aktif)
